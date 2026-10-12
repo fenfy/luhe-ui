@@ -72,7 +72,7 @@
     <pagination v-show="total > 0" :total="total" v-model:page="queryParams.pageNum" v-model:limit="queryParams.pageSize" @pagination="getList" />
 
     <!-- 开奖 -->
-    <el-dialog title="开奖" v-model="open" width="520px" append-to-body>
+    <el-dialog title="开奖" v-model="open" width="860px" append-to-body>
       <el-form ref="drawRef" :model="form" :rules="rules" label-width="80px">
         <el-form-item label="期号" prop="issueNo">
           <el-date-picker v-model="form.issueNo" type="date" value-format="YYYYMMDD" format="YYYY-MM-DD" :clearable="false" style="width: 180px" @change="loadSummary" />
@@ -82,7 +82,7 @@
           <el-tag v-if="summary && summary.drawn" type="warning" size="small" class="ml10">该期已开奖</el-tag>
         </el-form-item>
         <el-form-item label="赔付比例" prop="ratio">
-          <el-radio-group v-model="form.ratio">
+          <el-radio-group v-model="form.ratio" @change="loadPreview">
             <el-radio-button v-for="r in options.ratios" :key="r" :value="r">{{ r }}%</el-radio-button>
           </el-radio-group>
         </el-form-item>
@@ -92,6 +92,42 @@
           </div>
         </el-form-item>
       </el-form>
+
+      <!-- 号码赔付预览 -->
+      <div v-if="preview" v-loading="previewLoading" class="preview">
+        <div class="preview-head">
+          <span class="preview-title">号码赔付预览</span>
+          <span>上限 {{ formatMoney(preview.limit) }} 元</span>
+          <span class="sep">·</span>
+          <span>满足上限 {{ withinCount }} 个号码</span>
+          <span class="sep">·</span>
+          <template v-if="!preview.overLimit">
+            <span>候选 {{ candidateRows.length }} 个，赔付 {{ formatMoney(candidateRows[0]?.payout) }} 元（{{ ratioText(candidateRows[0]?.payoutRatio) }}）</span>
+          </template>
+          <el-tag v-else type="danger" size="small">没有号码满足上限，将开出赔付最少的号码（{{ formatMoney(candidateRows[0]?.payout) }} 元）</el-tag>
+        </div>
+        <div class="preview-grid">
+          <div
+            v-for="row in preview.rows"
+            :key="row.number"
+            class="preview-cell"
+            :class="{ candidate: row.candidate, over: !row.withinLimit, special: result && result.specialNumber === row.number }"
+            :title="zodiacOf(row.number) + ' / ' + waveOf(row.number)"
+          >
+            <lottery-ball :number="row.number" :wave="waveOf(row.number)" size="small" />
+            <div class="cell-text">
+              <div class="cell-payout">{{ formatPayout(row.payout) }}</div>
+              <div class="cell-ratio">{{ ratioText(row.payoutRatio) }}</div>
+            </div>
+          </div>
+        </div>
+        <div class="preview-legend">
+          <span><i class="legend candidate"></i>候选（特码从中随机开出）</span>
+          <span><i class="legend within"></i>满足上限</span>
+          <span><i class="legend over"></i>超过上限</span>
+          <span v-if="result"><i class="legend special"></i>本期特码</span>
+        </div>
+      </div>
 
       <div v-if="result" class="result">
         <div class="result-title">第 {{ result.issueNo }} 期开奖结果</div>
@@ -120,7 +156,7 @@
 <script setup name="LotteryDraw">
 import LotteryBall from "../components/LotteryBall"
 import { getLotteryOptions, getIssueSummary } from "@/api/lottery/bet"
-import { listDraw, drawLottery } from "@/api/lottery/draw"
+import { listDraw, drawLottery, previewDraw } from "@/api/lottery/draw"
 
 const { proxy } = getCurrentInstance()
 
@@ -134,6 +170,11 @@ const open = ref(false)
 const submitting = ref(false)
 const summary = ref(null)
 const result = ref(null)
+const preview = ref(null)
+const previewLoading = ref(false)
+
+const candidateRows = computed(() => (preview.value ? preview.value.rows.filter(r => r.candidate) : []))
+const withinCount = computed(() => (preview.value ? preview.value.rows.filter(r => r.withinLimit).length : 0))
 
 const data = reactive({
   queryParams: {
@@ -160,6 +201,17 @@ function today() {
 function formatMoney(v) {
   if (v === null || v === undefined || v === "") return "—"
   return Number(v).toFixed(2)
+}
+
+function ratioText(v) {
+  return v === null || v === undefined ? "—" : v + "%"
+}
+
+/** 预览格子里的金额：去掉多余的 .00，过大时用「万」 */
+function formatPayout(v) {
+  const n = Number(v || 0)
+  if (n >= 100000) return (n / 10000).toFixed(1) + "万"
+  return Number.isInteger(n) ? String(n) : n.toFixed(2)
 }
 
 function waveOf(number) {
@@ -203,16 +255,37 @@ function resetQuery() {
 
 function loadSummary() {
   summary.value = null
+  preview.value = null
   if (!form.value.issueNo) return
   getIssueSummary(form.value.issueNo).then(res => {
     summary.value = res.data
+    loadPreview()
+  })
+}
+
+/** 未开奖且已选比例时加载号码赔付预览 */
+function loadPreview() {
+  if (!summary.value || summary.value.drawn || !form.value.ratio || result.value) {
+    if (!result.value) preview.value = null
+    return
+  }
+  const { issueNo, ratio } = form.value
+  previewLoading.value = true
+  previewDraw(issueNo, ratio).then(res => {
+    // 期号或比例已改变时丢弃过期结果
+    if (form.value.issueNo === issueNo && form.value.ratio === ratio) {
+      preview.value = res.data
+    }
+  }).finally(() => {
+    previewLoading.value = false
   })
 }
 
 /** 开奖按钮操作 */
 function handleDraw() {
-  form.value = { issueNo: today(), ratio: undefined }
+  form.value = { issueNo: today(), ratio: options.value.ratios[0] }
   result.value = null
+  preview.value = null
   proxy.resetForm("drawRef")
   open.value = true
   loadSummary()
@@ -258,6 +331,87 @@ onMounted(() => {
   font-size: 12px;
   color: #909399;
   line-height: 20px;
+}
+.preview {
+  margin: 0 20px 12px;
+}
+.preview-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  margin-bottom: 8px;
+}
+.preview-title {
+  font-weight: 600;
+  margin-right: 8px;
+}
+.sep {
+  color: #c0c4cc;
+}
+.preview-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+}
+.preview-cell {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 4px;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 4px;
+  font-size: 12px;
+  line-height: 15px;
+}
+.preview-cell.over {
+  background: var(--el-fill-color-light);
+  color: #a8abb2;
+}
+.preview-cell.candidate {
+  border-color: #2f9e44;
+  background: rgba(47, 158, 68, 0.08);
+}
+.preview-cell.special {
+  border: 2px solid #e6a23c;
+}
+.cell-text {
+  min-width: 0;
+}
+.cell-payout {
+  font-weight: 600;
+  white-space: nowrap;
+}
+.cell-ratio {
+  font-size: 11px;
+  opacity: 0.8;
+}
+.preview-legend {
+  display: flex;
+  gap: 16px;
+  margin-top: 6px;
+  font-size: 12px;
+  color: #909399;
+}
+.legend {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 4px;
+  border-radius: 2px;
+  border: 1px solid var(--el-border-color);
+  vertical-align: -1px;
+}
+.legend.candidate {
+  border-color: #2f9e44;
+  background: rgba(47, 158, 68, 0.25);
+}
+.legend.over {
+  background: var(--el-fill-color-dark);
+}
+.legend.special {
+  border: 2px solid #e6a23c;
 }
 .result {
   margin: 0 20px;

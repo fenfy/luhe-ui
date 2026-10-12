@@ -9,6 +9,15 @@ export function listDraw(query) {
   })
 }
 
+// 开奖预览（每个号码的赔付、是否满足上限、是否候选）
+export function previewDraw(issueNo, ratio) {
+  return request({
+    url: '/lottery/draw/preview',
+    method: 'get',
+    params: { issueNo, ratio }
+  })
+}
+
 // 执行开奖
 export function drawLottery(issueNo, ratio) {
   return request({
