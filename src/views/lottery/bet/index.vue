@@ -1,8 +1,9 @@
 <template>
   <div class="app-container">
     <el-form :model="queryParams" ref="queryRef" :inline="true" v-show="showSearch" label-width="68px">
-      <el-form-item label="期号" prop="issueNo">
+      <el-form-item label="开奖日期" prop="issueNo">
         <el-date-picker v-model="queryParams.issueNo" type="date" value-format="YYYYMMDD" format="YYYY-MM-DD" placeholder="全部期号" clearable style="width: 180px" />
+        <span v-if="queryParams.issueNo" class="ml10 issue-tip">第 {{ issueOf(queryParams.issueNo) }} 期</span>
       </el-form-item>
       <el-form-item label="投注方式" prop="betType">
         <el-select v-model="queryParams.betType" placeholder="全部" clearable style="width: 140px">
@@ -85,9 +86,9 @@
     <!-- 新增/修改投注 -->
     <el-dialog :title="title" v-model="open" width="720px" append-to-body>
       <el-form ref="betRef" :model="form" :rules="rules" label-width="80px">
-        <el-form-item label="期号" prop="issueNo">
-          <el-date-picker v-model="form.issueNo" type="date" value-format="YYYYMMDD" format="YYYY-MM-DD" :disabled="isEdit" :clearable="false" style="width: 180px" />
-          <span v-if="issueDayOfYear !== null" class="ml10">{{ issueDayOfYear }} 期</span>
+        <el-form-item label="开奖日期" prop="issueNo">
+          <el-date-picker v-if="!isEdit" v-model="form.issueNo" type="date" value-format="YYYYMMDD" format="YYYY-MM-DD" :clearable="false" style="width: 180px" />
+          <span :class="{ ml10: !isEdit }" class="issue-tip">第 {{ isEdit ? form.issueNo : issueOf(form.issueNo) }} 期</span>
         </el-form-item>
         <el-form-item label="投注方式" prop="betType">
           <el-radio-group v-model="form.betType" @change="form.betItems = []">
@@ -150,6 +151,7 @@
 
 <script setup name="LotteryBet">
 import LotteryBall from "../components/LotteryBall"
+import { issueOf, todayDate } from "@/utils/lotteryIssue"
 import { getLotteryOptions, listBet, getIssueSummary, addBet, updateBet, delBet } from "@/api/lottery/bet"
 
 const { proxy } = getCurrentInstance()
@@ -176,7 +178,7 @@ const data = reactive({
   queryParams: {
     pageNum: 1,
     pageSize: 20,
-    issueNo: today(),
+    issueNo: todayDate(),
     betType: undefined
   },
   form: {},
@@ -211,12 +213,6 @@ const preview = computed(() => {
     return { item, count, ok, per: ok ? cents / count / 100 : 0 }
   })
 })
-
-function today() {
-  const d = new Date()
-  const p = n => String(n).padStart(2, "0")
-  return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}`
-}
 
 function formatMoney(v) {
   if (v === null || v === undefined || v === "") return "—"
@@ -304,7 +300,7 @@ function handleQuery() {
 /** 重置按钮操作 */
 function resetQuery() {
   proxy.resetForm("queryRef")
-  queryParams.value.issueNo = today()
+  queryParams.value.issueNo = todayDate()
   handleQuery()
 }
 
@@ -315,7 +311,7 @@ function handleSelectionChange(rows) {
 function reset(betType = "1") {
   form.value = {
     betId: undefined,
-    issueNo: queryParams.value.issueNo || today(),
+    issueNo: queryParams.value.issueNo || todayDate(),
     betType,
     betItems: [],
     amount: undefined,
@@ -392,6 +388,9 @@ onMounted(() => {
 <style scoped>
 .ml10 {
   margin-left: 10px;
+}
+.issue-tip {
+  color: #606266;
 }
 .item-grid {
   display: flex;
