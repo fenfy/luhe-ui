@@ -87,6 +87,7 @@
       <el-form ref="betRef" :model="form" :rules="rules" label-width="80px">
         <el-form-item label="期号" prop="issueNo">
           <el-date-picker v-model="form.issueNo" type="date" value-format="YYYYMMDD" format="YYYY-MM-DD" :disabled="isEdit" :clearable="false" style="width: 180px" />
+          <span v-if="issueDayOfYear !== null" class="ml10">{{ issueDayOfYear }} 期</span>
         </el-form-item>
         <el-form-item label="投注方式" prop="betType">
           <el-radio-group v-model="form.betType" @change="form.betItems = []">
@@ -190,6 +191,15 @@ const data = reactive({
 const { queryParams, form, rules } = toRefs(data)
 
 const canDeleteSelection = computed(() => selection.value.length > 0 && selection.value.every(r => !r.drawn))
+
+/** issueNo 距当年 1 月 1 日的天数 */
+const issueDayOfYear = computed(() => {
+  const s = String(form.value.issueNo || "")
+  if (!/^\d{8}$/.test(s)) return null
+  const d = new Date(Number(s.slice(0, 4)), Number(s.slice(4, 6)) - 1, Number(s.slice(6, 8)))
+  if (isNaN(d.getTime())) return null
+  return Math.round((d - new Date(d.getFullYear(), 0, 1)) / 86400000)
+})
 
 /** 每个已选投注项的号码数与每号金额（金额以分计算，避免浮点误差） */
 const preview = computed(() => {

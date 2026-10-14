@@ -76,6 +76,7 @@
       <el-form ref="drawRef" :model="form" :rules="rules" label-width="80px">
         <el-form-item label="期号" prop="issueNo">
           <el-date-picker v-model="form.issueNo" type="date" value-format="YYYYMMDD" format="YYYY-MM-DD" :clearable="false" style="width: 180px" @change="loadSummary" />
+          <span v-if="dayOfYear(form.issueNo) !== null" class="ml10">{{ dayOfYear(form.issueNo) }} 期</span>
         </el-form-item>
         <el-form-item label="本期投注">
           <span v-if="summary">{{ summary.betCount }} 笔，总投注 {{ formatMoney(summary.totalAmount) }} 元</span>
@@ -226,6 +227,15 @@ function zodiacOf(number) {
 
 function rowClassName({ row }) {
   return row.overLimit === "1" ? "over-limit-row" : ""
+}
+
+/** issueNo 距当年 1 月 1 日的天数 */
+function dayOfYear(issueNo) {
+  const s = String(issueNo || "")
+  if (!/^\d{8}$/.test(s)) return null
+  const d = new Date(Number(s.slice(0, 4)), Number(s.slice(4, 6)) - 1, Number(s.slice(6, 8)))
+  if (isNaN(d.getTime())) return null
+  return Math.round((d - new Date(d.getFullYear(), 0, 1)) / 86400000)
 }
 
 /** 查询开奖记录 */
