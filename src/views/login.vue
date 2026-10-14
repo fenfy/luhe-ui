@@ -25,21 +25,6 @@
           <template #prefix><svg-icon icon-class="password" class="el-input__icon input-icon" /></template>
         </el-input>
       </el-form-item>
-      <el-form-item prop="code" v-if="captchaEnabled">
-        <el-input
-          v-model="loginForm.code"
-          size="large"
-          auto-complete="off"
-          placeholder="验证码"
-          style="width: 63%"
-          @keyup.enter="handleLogin"
-        >
-          <template #prefix><svg-icon icon-class="validCode" class="el-input__icon input-icon" /></template>
-        </el-input>
-        <div class="login-code">
-          <img :src="codeUrl" @click="getCode" class="login-code-img"/>
-        </div>
-      </el-form-item>
       <el-checkbox v-model="loginForm.rememberMe" style="margin:0px 0px 25px 0px;">记住密码</el-checkbox>
       <el-form-item style="width:100%;">
         <el-button
@@ -57,6 +42,8 @@
         </div>
       </el-form-item>
     </el-form>
+    <!-- 行为验证码 -->
+    <tianai-captcha ref="captchaRef" @success="handleCaptchaSuccess" />
     <!--  底部  -->
     <div class="el-login-footer">
       <span>{{ footerContent }}</span>
@@ -65,7 +52,8 @@
 </template>
 
 <script setup>
-import { getCodeImg } from "@/api/login"
+import { getCaptchaEnabled } from "@/api/login"
+import TianaiCaptcha from "@/components/TianaiCaptcha"
 import Cookies from "js-cookie"
 import { encrypt, decrypt } from "@/utils/jsencrypt"
 import useUserStore from '@/store/modules/user'
@@ -88,11 +76,10 @@ const loginForm = ref({
 
 const loginRules = {
   username: [{ required: true, trigger: "blur", message: "请输入您的账号" }],
-  password: [{ required: true, trigger: "blur", message: "请输入您的密码" }],
-  code: [{ required: true, trigger: "change", message: "请输入验证码" }]
+  password: [{ required: true, trigger: "blur", message: "请输入您的密码" }]
 }
 
-const codeUrl = ref("")
+const captchaRef = ref(null)
 const loading = ref(false)
 // 验证码开关
 const captchaEnabled = ref(true)
@@ -105,48 +92,60 @@ watch(route, (newRoute) => {
 }, { immediate: true })
 
 function handleLogin() {
+  if (loading.value) {
+    return
+  }
   proxy.$refs.loginRef.validate(valid => {
     if (valid) {
-      loading.value = true
-      // 勾选了需要记住密码设置在 cookie 中设置记住用户名和密码
-      if (loginForm.value.rememberMe) {
-        Cookies.set("username", loginForm.value.username, { expires: 30 })
-        Cookies.set("password", encrypt(loginForm.value.password), { expires: 30 })
-        Cookies.set("rememberMe", loginForm.value.rememberMe, { expires: 30 })
+      // 开启验证码时先完成行为验证，通过后再登录
+      if (captchaEnabled.value) {
+        captchaRef.value.show()
       } else {
-        // 否则移除
-        Cookies.remove("username")
-        Cookies.remove("password")
-        Cookies.remove("rememberMe")
+        doLogin()
       }
-      // 调用action的登录方法
-      userStore.login(loginForm.value).then(() => {
-        const query = route.query
-        const otherQueryParams = Object.keys(query).reduce((acc, cur) => {
-          if (cur !== "redirect") {
-            acc[cur] = query[cur]
-          }
-          return acc
-        }, {})
-        router.push({ path: redirect.value || "/", query: otherQueryParams })
-      }).catch(() => {
-        loading.value = false
-        // 重新获取验证码
-        if (captchaEnabled.value) {
-          getCode()
-        }
-      })
     }
   })
 }
 
-function getCode() {
-  getCodeImg().then(res => {
+// 验证码校验通过，uuid 为后端发放的一次性凭证
+function handleCaptchaSuccess(uuid) {
+  loginForm.value.uuid = uuid
+  doLogin()
+}
+
+function doLogin() {
+  loading.value = true
+  // 勾选了需要记住密码设置在 cookie 中设置记住用户名和密码
+  if (loginForm.value.rememberMe) {
+    Cookies.set("username", loginForm.value.username, { expires: 30 })
+    Cookies.set("password", encrypt(loginForm.value.password), { expires: 30 })
+    Cookies.set("rememberMe", loginForm.value.rememberMe, { expires: 30 })
+  } else {
+    // 否则移除
+    Cookies.remove("username")
+    Cookies.remove("password")
+    Cookies.remove("rememberMe")
+  }
+  // 调用action的登录方法
+  userStore.login(loginForm.value).then(() => {
+    const query = route.query
+    const otherQueryParams = Object.keys(query).reduce((acc, cur) => {
+      if (cur !== "redirect") {
+        acc[cur] = query[cur]
+      }
+      return acc
+    }, {})
+    router.push({ path: redirect.value || "/", query: otherQueryParams })
+  }).catch(() => {
+    loading.value = false
+    // 验证码凭证只能使用一次，失败后需重新验证
+    loginForm.value.uuid = ""
+  })
+}
+
+function getCaptchaConfig() {
+  getCaptchaEnabled().then(res => {
     captchaEnabled.value = res.captchaEnabled === undefined ? true : res.captchaEnabled
-    if (captchaEnabled.value) {
-      codeUrl.value = "data:image/gif;base64," + res.img
-      loginForm.value.uuid = res.uuid
-    }
   })
 }
 
@@ -161,7 +160,7 @@ function getCookie() {
   }
 }
 
-getCode()
+getCaptchaConfig()
 getCookie()
 </script>
 
@@ -203,15 +202,6 @@ getCookie()
   text-align: center;
   color: #bfbfbf;
 }
-.login-code {
-  width: 33%;
-  height: 40px;
-  float: right;
-  img {
-    cursor: pointer;
-    vertical-align: middle;
-  }
-}
 .el-login-footer {
   height: 40px;
   line-height: 40px;
@@ -223,10 +213,6 @@ getCookie()
   font-family: Arial;
   font-size: 12px;
   letter-spacing: 1px;
-}
-.login-code-img {
-  height: 40px;
-  padding-left: 12px;
 }
 
 html.dark .login {

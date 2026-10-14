@@ -56,14 +56,13 @@ export function logout() {
   })
 }
 
-// 获取验证码
-export function getCodeImg() {
+// 获取验证码开关
+export function getCaptchaEnabled() {
   return request({
-    url: '/captchaImage',
+    url: '/captcha/enabled',
     headers: {
       isToken: false
     },
-    method: 'get',
-    timeout: 20000
+    method: 'get'
   })
 }

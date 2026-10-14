@@ -37,21 +37,6 @@
           <template #prefix><svg-icon icon-class="password" class="el-input__icon input-icon" /></template>
         </el-input>
       </el-form-item>
-      <el-form-item prop="code" v-if="captchaEnabled">
-        <el-input
-          size="large" 
-          v-model="registerForm.code"
-          auto-complete="off"
-          placeholder="验证码"
-          style="width: 63%"
-          @keyup.enter="handleRegister"
-        >
-          <template #prefix><svg-icon icon-class="validCode" class="el-input__icon input-icon" /></template>
-        </el-input>
-        <div class="register-code">
-          <img :src="codeUrl" @click="getCode" class="register-code-img"/>
-        </div>
-      </el-form-item>
       <el-form-item style="width:100%;">
         <el-button
           :loading="loading"
@@ -68,6 +53,8 @@
         </div>
       </el-form-item>
     </el-form>
+    <!-- 行为验证码 -->
+    <tianai-captcha ref="captchaRef" @success="handleCaptchaSuccess" />
     <!--  底部  -->
     <div class="el-register-footer">
       <span>{{ footerContent }}</span>
@@ -77,7 +64,8 @@
 
 <script setup>
 import { ElMessageBox } from "element-plus"
-import { getCodeImg, register } from "@/api/login"
+import { getCaptchaEnabled, register } from "@/api/login"
+import TianaiCaptcha from "@/components/TianaiCaptcha"
 import defaultSettings from '@/settings'
 import { usePasswordRule } from "@/utils/passwordRule"
 
@@ -111,47 +99,59 @@ const registerRules = {
   confirmPassword: [
     { required: true, trigger: "blur", message: "请再次输入您的密码" },
     { required: true, validator: equalToPassword, trigger: "blur" }
-  ],
-  code: [{ required: true, trigger: "change", message: "请输入验证码" }]
+  ]
 }
 
-const codeUrl = ref("")
+const captchaRef = ref(null)
 const loading = ref(false)
 const captchaEnabled = ref(true)
 
 function handleRegister() {
+  if (loading.value) {
+    return
+  }
   proxy.$refs.registerRef.validate(valid => {
     if (valid) {
-      loading.value = true
-      register(registerForm.value).then(res => {
-        const username = registerForm.value.username
-        ElMessageBox.alert("<font color='red'>恭喜你，您的账号 " + username + " 注册成功！</font>", "系统提示", {
-          dangerouslyUseHTMLString: true,
-          type: "success",
-        }).then(() => {
-          router.push("/login")
-        }).catch(() => {})
-      }).catch(() => {
-        loading.value = false
-        if (captchaEnabled) {
-          getCode()
-        }
-      })
+      // 开启验证码时先完成行为验证，通过后再注册
+      if (captchaEnabled.value) {
+        captchaRef.value.show()
+      } else {
+        doRegister()
+      }
     }
   })
 }
 
-function getCode() {
-  getCodeImg().then(res => {
+// 验证码校验通过，uuid 为后端发放的一次性凭证
+function handleCaptchaSuccess(uuid) {
+  registerForm.value.uuid = uuid
+  doRegister()
+}
+
+function doRegister() {
+  loading.value = true
+  register(registerForm.value).then(res => {
+    const username = registerForm.value.username
+    ElMessageBox.alert("<font color='red'>恭喜你，您的账号 " + username + " 注册成功！</font>", "系统提示", {
+      dangerouslyUseHTMLString: true,
+      type: "success",
+    }).then(() => {
+      router.push("/login")
+    }).catch(() => {})
+  }).catch(() => {
+    loading.value = false
+    // 验证码凭证只能使用一次，失败后需重新验证
+    registerForm.value.uuid = ""
+  })
+}
+
+function getCaptchaConfig() {
+  getCaptchaEnabled().then(res => {
     captchaEnabled.value = res.captchaEnabled === undefined ? true : res.captchaEnabled
-    if (captchaEnabled.value) {
-      codeUrl.value = "data:image/gif;base64," + res.img
-      registerForm.value.uuid = res.uuid
-    }
   })
 }
 
-getCode()
+getCaptchaConfig()
 </script>
 
 <style lang='scss' scoped>
@@ -191,15 +191,6 @@ getCode()
   text-align: center;
   color: #bfbfbf;
 }
-.register-code {
-  width: 33%;
-  height: 40px;
-  float: right;
-  img {
-    cursor: pointer;
-    vertical-align: middle;
-  }
-}
 .el-register-footer {
   height: 40px;
   line-height: 40px;
@@ -211,9 +202,5 @@ getCode()
   font-family: Arial;
   font-size: 12px;
   letter-spacing: 1px;
-}
-.register-code-img {
-  height: 40px;
-  padding-left: 12px;
 }
 </style>
