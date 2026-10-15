@@ -29,7 +29,7 @@ export default defineConfig(({ mode, command }) => {
     build: {
       // https://vite.dev/config/build-options.html
       sourcemap: command === 'build' ? false : 'inline',
-      outDir: 'dist',
+      outDir: 'console',
       assetsDir: 'assets',
       chunkSizeWarningLimit: 2000,
       rollupOptions: {
