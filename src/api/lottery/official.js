@@ -69,3 +69,11 @@ export function syncOfficialHistory(from) {
     timeout: 120000
   })
 }
+
+// 立即读取香港开奖结果文件（路径在后台 app.official.hk.result-file 配置）
+export function syncOfficialHkFile() {
+  return request({
+    url: '/lottery/official/sync-hk-file',
+    method: 'post'
+  })
+}
