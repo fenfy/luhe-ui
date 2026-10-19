@@ -1,12 +1,12 @@
 <template>
   <div class="app-container">
     <el-radio-group v-model="queryParams.lotteryCode" class="mb8" @change="handleQuery">
-      <el-radio-button value="am">澳门六合彩</el-radio-button>
+      <el-radio-button value="xam">新澳门六合彩</el-radio-button>
       <el-radio-button value="hk">香港六合彩</el-radio-button>
     </el-radio-group>
     <div class="lottery-tip">
       <template v-if="isHk">香港六合彩没有自动数据源：先「新增排期」（期号 + 开奖时间），开奖后「录入号码」；历史数据可用「批量导入」。到了开奖时间且已录入号码的期才会在 H5 显示。</template>
-      <template v-else>澳门六合彩每天 22:32 起自动同步，号码不能手改；同步有误时点「重新同步」。首次使用请点「同步历史」补齐 2025-01-01 以来的数据。</template>
+      <template v-else>新澳门六合彩每天 21:32 起自动同步，号码不能手改；同步有误时点「重新同步」。首次使用请点「同步历史」补齐 2025-01-01 以来的数据。</template>
     </div>
 
     <el-form :model="queryParams" ref="queryRef" :inline="true" v-show="showSearch" label-width="68px">
@@ -191,7 +191,7 @@ const data = reactive({
   queryParams: {
     pageNum: 1,
     pageSize: 10,
-    lotteryCode: "am",
+    lotteryCode: "xam",
     issueNo: undefined,
     status: undefined
   },

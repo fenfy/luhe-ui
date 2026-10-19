@@ -1,6 +1,6 @@
 import request from '@/utils/request'
 
-// 官方开奖列表（lotteryCode：am 澳门 / hk 香港）
+// 官方开奖列表（lotteryCode：xam 新澳门 / hk 香港）
 export function listOfficial(query) {
   return request({
     url: '/lottery/official/list',
@@ -44,7 +44,7 @@ export function delOfficial(drawIds) {
   })
 }
 
-// 重新同步一期（仅澳门）
+// 重新同步一期（仅新澳门）
 export function resyncOfficial(drawId) {
   return request({
     url: '/lottery/official/resync/' + drawId,
@@ -52,7 +52,7 @@ export function resyncOfficial(drawId) {
   })
 }
 
-// 同步澳门最新一期
+// 同步新澳门最新一期
 export function syncOfficialLatest() {
   return request({
     url: '/lottery/official/sync-latest',
@@ -60,7 +60,7 @@ export function syncOfficialLatest() {
   })
 }
 
-// 补澳门历史（from：YYYY-MM-DD），只补缺失的期
+// 补新澳门历史（from：YYYY-MM-DD），只补缺失的期
 export function syncOfficialHistory(from) {
   return request({
     url: '/lottery/official/sync-history',
