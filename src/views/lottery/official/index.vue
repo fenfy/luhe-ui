@@ -5,8 +5,8 @@
       <el-radio-button value="hk">香港六合彩</el-radio-button>
     </el-radio-group>
     <div class="lottery-tip">
-      <template v-if="isHk">香港六合彩没有自动数据源：先「新增排期」（期号 + 开奖时间），开奖后「录入号码」；历史数据可用「批量导入」。到了开奖时间且已录入号码的期才会在 H5 显示。</template>
-      <template v-else>新澳门六合彩每天 21:32 起自动同步，号码不能手改；同步有误时点「重新同步」。首次使用请点「同步历史」补齐 2025-01-01 以来的数据。</template>
+      <template v-if="isHk">香港六合彩每天 21:30–22:30 自动读取本地开奖结果文件（新期号直接入库，已录入的期不覆盖）；也可「新增排期」后手工「录入号码」，历史数据可用「批量导入」。到了开奖时间且已有号码的期才会在 H5 显示。</template>
+      <template v-else>澳门六合彩每天 22:32 起自动同步，号码不能手改；同步有误时点「重新同步」。首次使用请点「同步历史」补齐 2025-01-01 以来的数据。</template>
     </div>
 
     <el-form :model="queryParams" ref="queryRef" :inline="true" v-show="showSearch" label-width="68px">
@@ -32,6 +32,9 @@
         </el-col>
         <el-col :span="1.5">
           <el-button type="info" plain icon="Upload" @click="importRef.open()" v-hasPermi="['lottery:official:import']">批量导入</el-button>
+        </el-col>
+        <el-col :span="1.5">
+          <el-button type="success" plain icon="Document" :loading="syncing" @click="handleSyncHkFile" v-hasPermi="['lottery:official:sync']">读取结果文件</el-button>
         </el-col>
       </template>
       <template v-else>
@@ -164,12 +167,12 @@ import ExcelImportDialog from "@/components/ExcelImportDialog"
 import { getLotteryOptions } from "@/api/lottery/bet"
 import {
   listOfficial, addOfficial, updateOfficial, saveOfficialNumbers, delOfficial,
-  resyncOfficial, syncOfficialLatest, syncOfficialHistory
+  resyncOfficial, syncOfficialLatest, syncOfficialHistory, syncOfficialHkFile
 } from "@/api/lottery/official"
 
 const { proxy } = getCurrentInstance()
 
-const sourceText = { 1: "接口同步", 2: "手工录入", 3: "批量导入" }
+const sourceText = { 1: "接口同步", 2: "手工录入", 3: "批量导入", 4: "结果文件" }
 const numberLabels = ["正码1", "正码2", "正码3", "正码4", "正码5", "正码6", "特码"]
 const allNumbers = Array.from({ length: 49 }, (_, i) => String(i + 1).padStart(2, "0"))
 
@@ -326,6 +329,16 @@ function handleResync(row) {
 function handleSyncLatest() {
   syncing.value = true
   syncOfficialLatest().then(res => {
+    proxy.$modal.msgSuccess(res.msg || "完成")
+    getList()
+  }).finally(() => {
+    syncing.value = false
+  })
+}
+
+function handleSyncHkFile() {
+  syncing.value = true
+  syncOfficialHkFile().then(res => {
     proxy.$modal.msgSuccess(res.msg || "完成")
     getList()
   }).finally(() => {
