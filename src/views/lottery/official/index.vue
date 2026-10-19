@@ -6,7 +6,7 @@
     </el-radio-group>
     <div class="lottery-tip">
       <template v-if="isHk">香港六合彩每天 21:30–22:30 自动读取本地开奖结果文件（新期号直接入库，已录入的期不覆盖）；也可「新增排期」后手工「录入号码」，历史数据可用「批量导入」。到了开奖时间且已有号码的期才会在 H5 显示。</template>
-      <template v-else>澳门六合彩每天 22:32 起自动同步，号码不能手改；同步有误时点「重新同步」。首次使用请点「同步历史」补齐 2025-01-01 以来的数据。</template>
+      <template v-else>新澳门六合彩每天 21:32 起自动同步，号码不能手改；同步有误时点「重新同步」。首次使用请点「同步历史」补齐 2025-01-01 以来的数据。</template>
     </div>
 
     <el-form :model="queryParams" ref="queryRef" :inline="true" v-show="showSearch" label-width="68px">
@@ -104,7 +104,7 @@
             <el-input v-model="form.issueNo" placeholder="年份 + 3 位序号，如 2026112" maxlength="7" :disabled="!!form.drawId && form.status === '1'" />
           </el-form-item>
           <el-form-item label="开奖时间" prop="drawTime">
-            <el-date-picker v-model="form.drawTime" type="datetime" value-format="YYYY-MM-DD HH:mm:ss" format="YYYY-MM-DD HH:mm" placeholder="如 2026-10-15 21:30" style="width: 100%" />
+            <el-date-picker v-model="form.drawTime" type="datetime" value-format="YYYY-MM-DD HH:mm:ss" format="YYYY-MM-DD HH:mm" placeholder="如 2026-10-15 21:35" style="width: 100%" />
           </el-form-item>
         </template>
         <el-form-item v-else label="期号">
