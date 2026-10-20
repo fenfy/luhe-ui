@@ -26,3 +26,12 @@ export function drawLottery(issueNo) {
     data: { issueNo }
   })
 }
+
+// 录入 / 修改号码：numbers 为 7 个号码，前 6 正码、第 7 特码
+export function saveDrawNumbers(issueNo, numbers) {
+  return request({
+    url: '/lottery/draw/numbers',
+    method: 'put',
+    data: { issueNo, numbers }
+  })
+}

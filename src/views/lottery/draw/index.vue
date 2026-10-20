@@ -36,6 +36,7 @@
       <el-table-column label="特码生肖/色波" align="center" width="120">
         <template #default="scope">{{ zodiacOf(scope.row.specialNumber) }} / {{ waveOf(scope.row.specialNumber) }}</template>
       </el-table-column>
+      <!--
       <el-table-column label="总投注" align="right" prop="totalAmount" width="110">
         <template #default="scope">{{ formatMoney(scope.row.totalAmount) }}</template>
       </el-table-column>
@@ -45,6 +46,7 @@
       <el-table-column label="赔付占比" align="center" prop="payoutRatio" width="100">
         <template #default="scope">{{ ratioText(scope.row.payoutRatio) }}</template>
       </el-table-column>
+      -->
       <el-table-column label="操作人" align="center" prop="createBy" width="100" />
       <el-table-column label="开奖时间" align="center" prop="createTime" width="160">
         <template #default="scope">
@@ -55,64 +57,33 @@
     <pagination v-show="total > 0" :total="total" v-model:page="queryParams.pageNum" v-model:limit="queryParams.pageSize" @pagination="getList" />
 
     <!-- 开奖 -->
-    <el-dialog title="开奖" v-model="open" width="860px" append-to-body>
+    <el-dialog title="开奖" v-model="open" width="640px" append-to-body>
       <el-form ref="drawRef" :model="form" :rules="rules" label-width="80px">
         <el-form-item label="开奖日期" prop="issueNo">
-          <el-date-picker v-model="form.issueNo" type="date" value-format="YYYYMMDD" format="YYYY-MM-DD" :clearable="false" style="width: 180px" @change="loadSummary" />
-          <span class="issue-tip">第 {{ issueOf(form.issueNo) }} 期</span>
-        </el-form-item>
-        <el-form-item label="本期投注">
-          <span v-if="summary">{{ summary.betCount }} 笔，总投注 {{ formatMoney(summary.totalAmount) }} 元</span>
-          <el-tag v-if="summary && summary.drawn" type="warning" size="small" class="ml10">该期已开奖</el-tag>
-        </el-form-item>
-        <el-form-item>
-          <div class="form-tip">从 49 个号码中随机开出 6 个正码和 1 个特码，不参考投注；赔付按开出的特码对本期投注结算。每期只能开一次。</div>
+          <el-date-picker v-model="form.issueNo" type="date" value-format="YYYYMMDD" format="YYYY-MM-DD" :clearable="false" style="width: 180px" @change="handleDateChange" />
+          <span class="issue-tip">第 <span style="color: #ec1414;">{{ issueOf(form.issueNo) }}</span> 期</span>
         </el-form-item>
       </el-form>
 
       <!-- 号码赔付参考：每个号码作为特码时本期要赔多少 -->
-      <div v-if="preview" v-loading="previewLoading" class="preview">
-        <div class="preview-head">
-          <span class="preview-title">号码赔付参考</span>
-          <span>每个号码作为特码时，本期投注的赔付与占比（仅供参考，不影响开奖）</span>
-        </div>
-        <div class="preview-grid">
-          <div
-            v-for="row in preview.rows"
-            :key="row.number"
-            class="preview-cell"
-            :class="{ zero: Number(row.payout) === 0, special: result && result.specialNumber === row.number }"
-            :title="zodiacOf(row.number) + ' / ' + waveOf(row.number)"
-          >
-            <lottery-ball :number="row.number" :wave="waveOf(row.number)" size="small" />
-            <div class="cell-text">
-              <div class="cell-payout">{{ formatPayout(row.payout) }}</div>
-              <div class="cell-ratio">{{ ratioText(row.payoutRatio) }}</div>
-            </div>
-          </div>
-        </div>
-        <div v-if="result" class="preview-legend">
-          <span><i class="legend special"></i>本期特码</span>
+      <div class="numbers-grid">
+        <div v-for="(label, i) in numberLabels" :key="i" class="number-cell">
+          <div class="number-label" :class="{ special: i === 6 }">{{ label }}</div>
+          <el-select v-model="numbersForm.numbers[i]" filterable placeholder="号码" style="width: 76px">
+            <el-option v-for="n in allNumbers" :key="n" :label="n" :value="n" :disabled="isPicked(n, i)" />
+          </el-select>
         </div>
       </div>
-
-      <div v-if="result" class="result">
-        <div class="result-title">第 {{ result.issueNo }} 期开奖结果</div>
-        <div class="draw-balls">
-          <lottery-ball v-for="n in result.normalNumbers.split(',')" :key="n" :number="n" :wave="waveOf(n)" size="large" />
-          <span class="plus">+</span>
-          <lottery-ball :number="result.specialNumber" :wave="waveOf(result.specialNumber)" selected size="large" />
-        </div>
-        <div class="result-line">
-          特码 {{ result.specialNumber }}（{{ zodiacOf(result.specialNumber) }} / {{ waveOf(result.specialNumber) }}），
-          赔付 {{ formatMoney(result.payout) }} 元，占总投注 {{ ratioText(result.payoutRatio) }}
-        </div>
+      <div class="numbers-preview">
+        <lottery-ball v-for="i in 6" :key="'n' + i" :number="numbersForm.numbers[i - 1] || '?'" :wave="numbersForm.numbers[i - 1] ? waveOf(numbersForm.numbers[i - 1]) : ''" />
+        <span class="plus">+</span>
+        <lottery-ball :number="numbersForm.numbers[6] || '?'" :wave="numbersForm.numbers[6] ? waveOf(numbersForm.numbers[6]) : ''" selected size="large" />
       </div>
-
+      <div class="form-tip">按开出顺序选 6 个正码，最后一个为特码；7 个号码不能重复。保存后该期变为「已开奖」，到了开奖时间会在 H5 显示。</div>
       <template #footer>
         <div class="dialog-footer">
-          <el-button v-if="!result" type="primary" :loading="submitting" :disabled="!summary || summary.drawn" @click="submitDraw">开 奖</el-button>
-          <el-button @click="open = false">{{ result ? '关 闭' : '取 消' }}</el-button>
+          <el-button type="primary" :loading="submitting" @click="submitNumbers">保 存</el-button>
+          <el-button @click="open = false">取 消</el-button>
         </div>
       </template>
     </el-dialog>
@@ -123,7 +94,7 @@
 import LotteryBall from "../components/LotteryBall"
 import { issueOf, todayDate } from "@/utils/lotteryIssue"
 import { getLotteryOptions, getIssueSummary } from "@/api/lottery/bet"
-import { listDraw, drawLottery, previewDraw } from "@/api/lottery/draw"
+import { listDraw, saveDrawNumbers, previewDraw } from "@/api/lottery/draw"
 
 const { proxy } = getCurrentInstance()
 
@@ -139,6 +110,9 @@ const summary = ref(null)
 const result = ref(null)
 const preview = ref(null)
 const previewLoading = ref(false)
+const numberLabels = ["正码1", "正码2", "正码3", "正码4", "正码5", "正码6", "特码"]
+const allNumbers = Array.from({ length: 49 }, (_, i) => String(i + 1).padStart(2, "0"))
+const numbersForm = ref({ drawId: null, issueNo: "", numbers: [] })
 
 const data = reactive({
   queryParams: {
@@ -163,13 +137,6 @@ function ratioText(v) {
   return v === null || v === undefined ? "—" : v + "%"
 }
 
-/** 预览格子里的金额：去掉多余的 .00，过大时用「万」 */
-function formatPayout(v) {
-  const n = Number(v || 0)
-  if (n >= 100000) return (n / 10000).toFixed(1) + "万"
-  return Number.isInteger(n) ? String(n) : n.toFixed(2)
-}
-
 function waveOf(number) {
   const n = options.value.numbers.find(x => x.number === number)
   return n ? n.wave : ""
@@ -178,6 +145,10 @@ function waveOf(number) {
 function zodiacOf(number) {
   const n = options.value.numbers.find(x => x.number === number)
   return n ? n.zodiac : ""
+}
+
+function isPicked(n, index) {
+  return numbersForm.value.numbers.some((x, i) => i !== index && x === n)
 }
 
 /** 查询开奖记录 */
@@ -203,6 +174,12 @@ function resetQuery() {
   dateRange.value = []
   proxy.resetForm("queryRef")
   handleQuery()
+}
+
+/** 重新选择日期：清空已选号码并重新加载本期汇总 */
+function handleDateChange() {
+  numbersForm.value.numbers = []
+  loadSummary()
 }
 
 /** 加载本期汇总；未开奖时再加载赔付参考 */
@@ -239,18 +216,22 @@ function handleDraw() {
   loadSummary()
 }
 
-function submitDraw() {
-  proxy.$refs["drawRef"].validate(valid => {
-    if (!valid) return
-    proxy.$modal.confirm(`确认开出第 ${issueOf(form.value.issueNo)} 期吗？开奖后该期投注将锁定，且不能重开。`).then(() => {
-      submitting.value = true
-      return drawLottery(form.value.issueNo)
-    }).then(res => {
-      result.value = res.data
-      getList()
-    }).catch(() => {}).finally(() => {
-      submitting.value = false
-    })
+function submitNumbers() {
+  const numbers = numbersForm.value.numbers
+  if (numbers.length !== 7 || numbers.some(n => !n)) {
+    proxy.$modal.msgError("请选齐 6 个正码和 1 个特码")
+    return
+  }
+  const text = numbers.slice(0, 6).join(" ") + " + " + numbers[6]
+  proxy.$modal.confirm(`确认第 ${issueOf(form.value.issueNo)} 期开奖号码为 ${text} 吗？`).then(() => {
+    submitting.value = true
+    return saveDrawNumbers(form.value.issueNo, numbers)
+  }).then(() => {+
+    proxy.$modal.msgSuccess("已保存")
+    open.value = false
+    getList()
+  }).catch(() => {}).finally(() => {
+    submitting.value = false
   })
 }
 
@@ -297,6 +278,34 @@ onMounted(() => {
 }
 .sep {
   color: #c0c4cc;
+}
+.numbers-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 8px;
+}
+.number-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.number-label {
+  font-size: 12px;
+  color: #606266;
+}
+.number-label.special {
+  color: #e6a23c;
+  font-weight: 600;
+}
+.draw-balls,
+.numbers-preview {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.numbers-preview {
+  margin: 16px 0 8px;
 }
 .preview-grid {
   display: grid;
@@ -365,6 +374,6 @@ onMounted(() => {
 }
 .issue-tip {
   margin-left: 10px;
-  color: #606266;
+  color: #686767;
 }
 </style>
