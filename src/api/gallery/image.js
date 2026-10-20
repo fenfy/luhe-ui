@@ -1,6 +1,14 @@
 import request from '@/utils/request'
 
-// 查询图片列表
+// 彩种列表 [{ code, name, shortName }]
+export function listGalleryGames() {
+  return request({
+    url: '/gallery/image/games',
+    method: 'get'
+  })
+}
+
+// 查询图片列表（lotteryCode 彩种、imageType 类型）
 export function listGalleryImage(query) {
   return request({
     url: '/gallery/image/list',
@@ -10,9 +18,10 @@ export function listGalleryImage(query) {
 }
 
 // 上传图片（一次一张）
-export function uploadGalleryImage(file, imageType) {
+export function uploadGalleryImage(file, lotteryCode, imageType) {
   const data = new FormData()
   data.append('file', file)
+  data.append('lotteryCode', lotteryCode)
   data.append('imageType', imageType)
   return request({
     url: '/gallery/image/upload',

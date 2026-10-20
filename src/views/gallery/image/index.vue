@@ -1,5 +1,9 @@
 <template>
   <div class="app-container">
+    <el-radio-group v-model="activeLottery" class="lottery-switch" @change="handleQuery">
+      <el-radio-button v-for="g in games" :key="g.code" :value="g.code">{{ g.name }}</el-radio-button>
+    </el-radio-group>
+
     <el-tabs v-model="activeType" @tab-change="handleQuery">
       <el-tab-pane label="全部" name="all" />
       <el-tab-pane v-for="dict in app_gallery_type" :key="dict.value" :label="dict.label" :name="dict.value" />
@@ -48,7 +52,7 @@
                 <span class="card-name" :title="item.originalName">{{ item.originalName }}</span>
               </div>
               <div class="card-meta">
-                <span>{{ formatSize(item.fileSize) }}</span>
+                <span>{{ gameName(item.lotteryCode) }} · {{ formatSize(item.fileSize) }}</span>
                 <span>{{ parseTime(item.createTime, '{y}-{m}-{d} {h}:{i}') }}</span>
               </div>
               <div class="card-actions">
@@ -74,6 +78,11 @@
     <!-- 上传图片对话框 -->
     <el-dialog title="上传图片" v-model="upload.open" width="640px" append-to-body :close-on-click-modal="false" @closed="resetUpload">
       <el-form ref="uploadRef" :model="upload.form" :rules="upload.rules" label-width="80px">
+        <el-form-item label="彩种" prop="lotteryCode">
+          <el-radio-group v-model="upload.form.lotteryCode" :disabled="upload.uploading">
+            <el-radio-button v-for="g in games" :key="g.code" :value="g.code">{{ g.name }}</el-radio-button>
+          </el-radio-group>
+        </el-form-item>
         <el-form-item label="图片类型" prop="imageType">
           <el-select v-model="upload.form.imageType" placeholder="请选择图片类型" style="width: 240px">
             <el-option v-for="dict in app_gallery_type" :key="dict.value" :label="dict.label" :value="dict.value" />
@@ -114,7 +123,7 @@
 <script setup name="GalleryImage">
 import { ElMessage } from "element-plus"
 import { checkPermi } from "@/utils/permission"
-import { listGalleryImage, uploadGalleryImage, delGalleryImage } from "@/api/gallery/image"
+import { listGalleryGames, listGalleryImage, uploadGalleryImage, delGalleryImage } from "@/api/gallery/image"
 
 const { proxy } = getCurrentInstance()
 const { app_gallery_type } = useDict("app_gallery_type")
@@ -133,11 +142,19 @@ const imageList = ref([])
 const loading = ref(true)
 const total = ref(0)
 const activeType = ref("all")
+/** 彩种：接口返回前先用这份，名称以后端为准 */
+const games = ref([
+  { code: "yd", name: "云顶六合彩", shortName: "马彩" },
+  { code: "xam", name: "新澳门六合彩", shortName: "澳彩" },
+  { code: "hk", name: "香港六合彩", shortName: "港彩" }
+])
+const activeLottery = ref("yd")
 const selectedIds = ref([])
 
 const queryParams = ref({
   pageNum: 1,
   pageSize: 24,
+  lotteryCode: undefined,
   imageType: undefined
 })
 
@@ -146,8 +163,9 @@ const upload = reactive({
   uploading: false,
   fileList: [],
   failures: [],
-  form: { imageType: undefined },
+  form: { lotteryCode: undefined, imageType: undefined },
   rules: {
+    lotteryCode: [{ required: true, message: "请选择彩种", trigger: "change" }],
     imageType: [{ required: true, message: "请选择图片类型", trigger: "change" }]
   }
 })
@@ -159,6 +177,7 @@ const isIndeterminate = computed(() => selectedIds.value.length > 0 && !isAllSel
 /** 查询图片列表 */
 function getList() {
   loading.value = true
+  queryParams.value.lotteryCode = activeLottery.value
   queryParams.value.imageType = activeType.value === "all" ? undefined : activeType.value
   listGalleryImage(queryParams.value).then(res => {
     imageList.value = res.rows
@@ -243,6 +262,7 @@ function handleDelete(item) {
 
 /** 打开上传对话框：默认选中当前标签页的类型 */
 function handleUpload() {
+  upload.form.lotteryCode = activeLottery.value
   upload.form.imageType = activeType.value === "all" ? undefined : activeType.value
   upload.open = true
 }
@@ -282,7 +302,7 @@ function submitUpload() {
     for (const file of pending) {
       file.status = "uploading"
       try {
-        await uploadGalleryImage(file.raw, upload.form.imageType)
+        await uploadGalleryImage(file.raw, upload.form.lotteryCode, upload.form.imageType)
         file.status = "success"
         successCount++
       } catch (e) {
@@ -293,6 +313,8 @@ function submitUpload() {
     upload.fileList = upload.fileList.filter(f => f.status !== "success")
     upload.uploading = false
     if (successCount > 0) {
+      // 切到刚上传的彩种，便于查看
+      activeLottery.value = upload.form.lotteryCode
       queryParams.value.pageNum = 1
       getList()
     }
@@ -312,12 +334,25 @@ function resetUpload() {
   proxy.resetForm("uploadRef")
 }
 
+/** 彩种名称（卡片上显示简称） */
+function gameName(code) {
+  const g = games.value.find(x => x.code === code)
+  return g ? g.shortName : code
+}
+
 onMounted(() => {
   getList()
+  listGalleryGames().then(res => {
+    if (Array.isArray(res.data) && res.data.length) games.value = res.data
+  }).catch(() => {})
 })
 </script>
 
 <style scoped lang="scss">
+.lottery-switch {
+  margin-bottom: 8px;
+}
+
 .select-all {
   display: flex;
   align-items: center;
